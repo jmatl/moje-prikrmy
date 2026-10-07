@@ -11,9 +11,58 @@ jobs:
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      SHARING_API: https://horrible-partial-resource--honzamatl.replit.app
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Test family sharing backend
+        run: |
+          set -euo pipefail
+          curl -fsS "$SHARING_API/health" > /tmp/health.json
+          python3 - <<'PY'
+          import json
+          with open('/tmp/health.json', encoding='utf-8') as f:
+              data=json.load(f)
+          assert data.get('ok') is True, data
+          PY
+
+          KEY="GHA-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          PAYLOAD='{"foods":[{"id":"gha-test","name":"Test mrkev","category":"Zelenina","status":"Ochutnáno","date":"2026-10-07","rating":"5","reaction":"Líbilo se","notes":"CI sync test","updatedAt":1234567890}]}'
+          curl -fsS -X PUT \
+            -H 'Origin: null' \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json' \
+            --data "$PAYLOAD" \
+            "$SHARING_API/api/families/$KEY" > /tmp/put.json
+          curl -fsS \
+            -H 'Origin: null' \
+            -H 'Accept: application/json' \
+            "$SHARING_API/api/families/$KEY" > /tmp/get.json
+          python3 - <<'PY'
+          import json
+          with open('/tmp/get.json', encoding='utf-8') as f:
+              data=json.load(f)
+          foods=data.get('foods')
+          assert isinstance(foods, list) and len(foods)==1, data
+          item=foods[0]
+          assert item.get('id')=='gha-test', item
+          assert item.get('name')=='Test mrkev', item
+          assert item.get('notes')=='CI sync test', item
+          PY
+
+          curl -fsS -X OPTIONS \
+            -D /tmp/cors.headers \
+            -o /dev/null \
+            -H 'Origin: null' \
+            -H 'Access-Control-Request-Method: PUT' \
+            -H 'Access-Control-Request-Headers: content-type' \
+            "$SHARING_API/api/families/$KEY"
+          python3 - <<'PY'
+          h=open('/tmp/cors.headers', encoding='utf-8').read().lower()
+          assert 'access-control-allow-origin:' in h, h
+          assert 'access-control-allow-methods:' in h, h
+          PY
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
