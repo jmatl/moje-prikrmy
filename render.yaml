@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: moje-prikrmy-sync
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: moje-prikrmy-db
+          property: connectionString
+
+databases:
+  - name: moje-prikrmy-db
+    databaseName: moje_prikrmy
+    user: moje_prikrmy
